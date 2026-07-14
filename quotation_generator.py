@@ -25,12 +25,18 @@ from reportlab.platypus import (
 )
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+import reportlab.pdfbase.cidfonts as _cidfonts_module
 
 # ---------------------------------------------------------------------------
 # 字型設定：reportlab 內建支援繁體中文的 CID 字型是 MSung-Light
 # （沒有內建的繁中粗體，所以粗體效果改用「較大字級 + 顏色」模擬）
+#
+# 修正 reportlab 內建錯誤：它把 MSung-Light（繁體中文字型）誤對應到
+# UniGB-UCS2-H（簡體中文編碼表），導致部分繁體字顯示成亂碼/錯字。
+# 這裡強制修正成正確的繁體中文編碼表 UniCNS-UCS2-H。
 # ---------------------------------------------------------------------------
 FONT_NAME = "MSung-Light"
+_cidfonts_module.defaultUnicodeEncodings[FONT_NAME] = ("cht", "UniCNS-UCS2-H")
 pdfmetrics.registerFont(UnicodeCIDFont(FONT_NAME))
 
 PRIMARY_COLOR = colors.HexColor("#2E5C8A")   # 表頭深藍色
