@@ -15,17 +15,22 @@
 可以再依序擴充 example_data() 的結構與 generate_quotation() 的繪圖邏輯。
 """
 
+import os
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, KeepTogether
 )
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 import reportlab.pdfbase.cidfonts as _cidfonts_module
+
+# Logo 預設路徑：跟這支檔案放在同一層的 assets/logo.png
+_DEFAULT_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo.png")
 
 # ---------------------------------------------------------------------------
 # 字型設定：reportlab 內建支援繁體中文的 CID 字型是 MSung-Light
@@ -56,16 +61,16 @@ def _style(name, size=9, align=TA_LEFT, color=colors.black, leading=None):
 
 
 STYLES = {
-    "title": _style("title", size=16, align=TA_CENTER),
-    "subtitle": _style("subtitle", size=10, align=TA_CENTER, color=GREY_LINE),
-    "section_header": _style("section_header", size=10, align=TA_CENTER, color=colors.white),
-    "label": _style("label", size=9),
-    "value": _style("value", size=9),
-    "cell": _style("cell", size=8.5, leading=12),
-    "cell_center": _style("cell_center", size=8.5, align=TA_CENTER, leading=12),
-    "cell_right": _style("cell_right", size=8.5, align=TA_RIGHT, leading=12),
-    "note": _style("note", size=8, leading=11.5),
-    "note_bold": _style("note_bold", size=8, leading=11.5, color=colors.red),
+    "title": _style("title", size=16, align=TA_CENTER, leading=19),
+    "subtitle": _style("subtitle", size=10, align=TA_CENTER, color=GREY_LINE, leading=12),
+    "section_header": _style("section_header", size=10, align=TA_CENTER, color=colors.white, leading=12),
+    "label": _style("label", size=9, leading=11.5),
+    "value": _style("value", size=9, leading=11.5),
+    "cell": _style("cell", size=8.5, leading=9),
+    "cell_center": _style("cell_center", size=8.5, align=TA_CENTER, leading=9),
+    "cell_right": _style("cell_right", size=8.5, align=TA_RIGHT, leading=9),
+    "note": _style("note", size=8, leading=8.5),
+    "note_bold": _style("note_bold", size=8, leading=8.5, color=colors.red),
     "sign_label": _style("sign_label", size=9, align=TA_CENTER),
 }
 
@@ -83,8 +88,8 @@ def _section_header_table(text, width):
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), PRIMARY_COLOR),
         ("BOX", (0, 0), (-1, -1), 0.75, colors.black),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
     ]))
     return t
 
@@ -119,23 +124,48 @@ def _calc_items(items):
     return processed, subtotal_sum
 
 
-def generate_quotation(data, output_path="quotation.pdf"):
+def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
     """
     產生報價單 PDF。
 
     data 結構請參考 example_data()。
+    logo_path：公司 Logo 圖片路徑（png/jpg 皆可，建議透明背景 png）。
+               不指定的話，會自動找 assets/logo.png；找不到就不畫 Logo。
+               Logo 會印在每一頁的右上角。
     """
     page_width, page_height = A4
     margin = 15 * mm
     content_width = page_width - 2 * margin
+
+    if logo_path is None:
+        logo_path = _DEFAULT_LOGO_PATH
+    logo_path = logo_path if (logo_path and os.path.exists(logo_path)) else None
+
+    def _draw_logo(canvas_obj, doc_obj):
+        if not logo_path:
+            return
+        try:
+            img = ImageReader(logo_path)
+            iw, ih = img.getSize()
+            target_w = 32 * mm
+            target_h = target_w * ih / iw
+            x = page_width - margin - target_w
+            y = page_height - 10 * mm - target_h
+            canvas_obj.drawImage(
+                img, x, y, width=target_w, height=target_h,
+                mask="auto", preserveAspectRatio=True,
+            )
+        except Exception:
+            # Logo 讀取失敗就略過，不影響報價單其他內容產出
+            pass
 
     doc = SimpleDocTemplate(
         output_path,
         pagesize=A4,
         leftMargin=margin,
         rightMargin=margin,
-        topMargin=12 * mm,
-        bottomMargin=12 * mm,
+        topMargin=10 * mm,
+        bottomMargin=page_height / 3,   # 底部至少留白約 1/3 頁面高度
         title=data.get("quote_no", "Quotation"),
     )
 
@@ -147,16 +177,16 @@ def generate_quotation(data, output_path="quotation.pdf"):
     company = data.get("issuer", {})
     story.append(Paragraph(company.get("name_zh", "元盾資安股份有限公司"), STYLES["title"]))
     story.append(Paragraph(company.get("name_en", "Meta Shield Security Co., Ltd."), STYLES["subtitle"]))
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 2))
     contact_line = "服務電話：{phone} ，服務信箱：{mail} ，服務地址：{addr}".format(
         phone=company.get("phone", ""),
         mail=company.get("email", ""),
         addr=company.get("address", ""),
     )
-    story.append(Paragraph(contact_line, _style("issuer_contact", size=8, align=TA_CENTER)))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph("報　價　單<br/>Quotation", _style("doc_title", size=13, align=TA_CENTER)))
-    story.append(Spacer(1, 6))
+    story.append(Paragraph(contact_line, _style("issuer_contact", size=8, align=TA_CENTER, leading=10)))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("報　價　單<br/>Quotation", _style("doc_title", size=12, align=TA_CENTER, leading=15)))
+    story.append(Spacer(1, 4))
 
     # ------------------------------------------------------------------
     # 客戶基本資料
@@ -164,8 +194,8 @@ def generate_quotation(data, output_path="quotation.pdf"):
     story.append(_section_header_table("客 戶 基 本 資 料", content_width))
 
     client = data.get("client", {})
-    left_w = content_width * 0.15
-    val_w = content_width * 0.35
+    left_w = content_width * 0.13
+    val_w = content_width * 0.32
     info_rows = [
         ["公司名稱：", client.get("company", ""), "報價日期：", data.get("quote_date", "")],
         ["聯 絡 人：", client.get("contact", ""), "報價單號：", data.get("quote_no", "")],
@@ -176,13 +206,13 @@ def generate_quotation(data, output_path="quotation.pdf"):
     ]
     info_table_data = [[_p(r[0], "label"), _p(r[1], "value"), _p(r[2], "label"), _p(r[3], "value")]
                         for r in info_rows]
-    info_table = Table(info_table_data, colWidths=[left_w, val_w, left_w, val_w])
+    info_table = Table(info_table_data, colWidths=[left_w, val_w, left_w, val_w], hAlign="CENTER")
     info_table.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.75, colors.black),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
     ]))
     story.append(info_table)
@@ -227,8 +257,8 @@ def generate_quotation(data, output_path="quotation.pdf"):
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
         ("BACKGROUND", (0, 0), (-1, 0), LIGHT_BLUE),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
     ]))
     story.append(items_table)
@@ -252,12 +282,11 @@ def generate_quotation(data, output_path="quotation.pdf"):
     summary_table.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.75, colors.black),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
     ]))
     story.append(summary_table)
-    story.append(Spacer(1, 4))
 
     # ------------------------------------------------------------------
     # 備註區
@@ -286,7 +315,7 @@ def generate_quotation(data, output_path="quotation.pdf"):
         ("BOX", (0, 0), (-1, -1), 0.75, colors.black),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
         ("LEFTPADDING", (0, 0), (-1, -1), 5),
     ]))
     story.append(notes_table)
@@ -299,16 +328,21 @@ def generate_quotation(data, output_path="quotation.pdf"):
     sign_table = Table(
         [[_p(h, "cell_center") for h in sign_headers], ["", "", "", ""]],
         colWidths=[content_width / 4] * 4,
-        rowHeights=[16, 24],
+        rowHeights=[13, 18],
     )
     sign_table.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.75, colors.black),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
         ("BACKGROUND", (0, 0), (-1, 0), LIGHT_BLUE),
     ]))
-    story.append(sign_table)
+    story.append(
+        KeepTogether([
+            _section_header_table(company.get("name_zh", "元盾資安股份有限公司") + " 內部人員簽核", content_width),
+            sign_table,
+        ])
+    )
 
-    doc.build(story)
+    doc.build(story, onFirstPage=_draw_logo, onLaterPages=_draw_logo)
     return output_path
 
 
