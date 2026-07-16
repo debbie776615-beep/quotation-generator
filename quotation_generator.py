@@ -108,6 +108,10 @@ def _calc_items(items):
         discount = item.get("discount", 1)  # 1 = 不打折 (10折)
         qty = item.get("qty", 1)
 
+        price = unit_price
+        line_subtotal = project_price * qty
+        subtotal_sum += line_subtotal
+       
         project_price = round(unit_price * discount)
         line_subtotal = project_price * qty
         subtotal_sum += line_subtotal
