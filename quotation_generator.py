@@ -300,6 +300,8 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
         "4、付款方式：現金、匯款，交貨後開立發票後30天內付款。",
         "5、本報價單如經貴單位加蓋公司章或發票章為後傳真回傳 即視為正式報價單。",
         "6、以上專案金額總計費用為含稅價。",
+        "",
+        "",
     ])
     payment = data.get("payment_account", {})
     notes_left = "<br/>".join(notes) + \
@@ -309,7 +311,7 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
     notes_table = Table(
         [[Paragraph(notes_left, STYLES["note"]),
           Paragraph("客戶簽回欄<br/>(本報價單經簽回即視為正式報價單)", STYLES["sign_label"])]],
-        colWidths=[content_width * 0.8, content_width * 0.6],
+        colWidths=[content_width * 0.68, content_width * 0.32],
     )
     notes_table.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.75, colors.black),
