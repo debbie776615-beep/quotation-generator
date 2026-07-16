@@ -231,7 +231,7 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
         content_width * 0.05,   # 數量
         content_width * 0.10,   # 單價
         content_width * 0.10,   # 力麗專案價格 (計算後價格)
-        content_width * 0.15,   # 小計
+        content_width * 0.13,   # 小計
     ]
 
     header_row = [
@@ -248,6 +248,7 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
             _p(it["description"], "cell"),
             _p(it["unit"], "cell_center"),
             _p(it["qty"], "cell_center"),
+            _p(f"$ {it['price']:,}", "cell_right"),
             _p(f"$ {it['project_price']:,}", "cell_right"),
             _p(f"$ {it['subtotal']:,}", "cell_right"),
         ])
