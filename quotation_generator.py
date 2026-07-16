@@ -194,8 +194,8 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
     story.append(_section_header_table("客 戶 基 本 資 料", content_width))
 
     client = data.get("client", {})
-    left_w = content_width * 0.13
-    val_w = content_width * 0.32
+    left_w = content_width * 0.15
+    val_w = content_width * 0.35
     info_rows = [
         ["公司名稱：", client.get("company", ""), "報價日期：", data.get("quote_date", "")],
         ["聯 絡 人：", client.get("contact", ""), "報價單號：", data.get("quote_no", "")],
@@ -206,7 +206,7 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
     ]
     info_table_data = [[_p(r[0], "label"), _p(r[1], "value"), _p(r[2], "label"), _p(r[3], "value")]
                         for r in info_rows]
-    info_table = Table(info_table_data, colWidths=[left_w, val_w, left_w, val_w], hAlign="CENTER")
+    info_table = Table(info_table_data, colWidths=[left_w, val_w, left_w, val_w])
     info_table.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.75, colors.black),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.grey),
@@ -323,12 +323,11 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
     # ------------------------------------------------------------------
     # 內部簽核欄
     # ------------------------------------------------------------------
-    story.append(_section_header_table(company.get("name_zh", "元盾資安股份有限公司") + " 內部人員簽核", content_width))
     sign_headers = ["執行單位主管", "業務主管", "技術單位", "業務人員"]
     sign_table = Table(
         [[_p(h, "cell_center") for h in sign_headers], ["", "", "", ""]],
         colWidths=[content_width / 4] * 4,
-        rowHeights=[13, 18],
+        rowHeights=[13, 36],
     )
     sign_table.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.75, colors.black),
