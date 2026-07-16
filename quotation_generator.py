@@ -227,9 +227,10 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
         content_width * 0.05,   # No.
         content_width * 0.16,   # 產品名稱
         content_width * 0.36,   # 內容描述
-        content_width * 0.07,   # 單位
-        content_width * 0.07,   # 數量
-        content_width * 0.14,   # 力麗專案價格 (計算後價格)
+        content_width * 0.05,   # 單位
+        content_width * 0.05,   # 數量
+        content_width * 0.10,   # 單價
+        content_width * 0.10,   # 力麗專案價格 (計算後價格)
         content_width * 0.15,   # 小計
     ]
 
