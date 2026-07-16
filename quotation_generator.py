@@ -236,8 +236,8 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
     header_row = [
         _p("No.", "cell_center"), _p("產品名稱", "cell_center"),
         _p("內容描述", "cell_center"), _p("單位", "cell_center"),
-        _p("數量", "cell_center"), _p("專案價格", "cell_center"),
-        _p("小 計", "cell_center"),
+        _p("數量", "cell_center"), _p("單 價", "cell_center"),
+        _p("專案價格", "cell_center"),_p("小 計", "cell_center"),
     ]
     table_data = [header_row]
     for it in items:
