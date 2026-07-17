@@ -10,9 +10,6 @@
 3. 每個產品項目可填入「折數」(discount) 欄位，程式會自動用「原價 x 折數」
    算出「力麗專案價格」與「小計」，但「折數」欄位本身 **不會** 出現在產出的報價單上，
    只作為內部試算使用。
-
-之後如果有新的欄位需求（例如：多筆稅率、多頁項目、Logo 圖檔等），
-可以再依序擴充 example_data() 的結構與 generate_quotation() 的繪圖邏輯。
 """
 
 import os
@@ -29,34 +26,21 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 import reportlab.pdfbase.cidfonts as _cidfonts_module
 
-# Logo 預設路徑：跟這支檔案放在同一層的 assets/logo.png
 _DEFAULT_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo.png")
 
-# ---------------------------------------------------------------------------
-# 字型設定：reportlab 內建支援繁體中文的 CID 字型是 MSung-Light
-# （沒有內建的繁中粗體，所以粗體效果改用「較大字級 + 顏色」模擬）
-#
-# 修正 reportlab 內建錯誤：它把 MSung-Light（繁體中文字型）誤對應到
-# UniGB-UCS2-H（簡體中文編碼表），導致部分繁體字顯示成亂碼/錯字。
-# 這裡強制修正成正確的繁體中文編碼表 UniCNS-UCS2-H。
-# ---------------------------------------------------------------------------
 FONT_NAME = "MSung-Light"
 _cidfonts_module.defaultUnicodeEncodings[FONT_NAME] = ("cht", "UniCNS-UCS2-H")
 pdfmetrics.registerFont(UnicodeCIDFont(FONT_NAME))
 
-PRIMARY_COLOR = colors.HexColor("#2E5C8A")   # 表頭深藍色
-LIGHT_BLUE = colors.HexColor("#DCE6F1")      # 表頭淺藍底色
+PRIMARY_COLOR = colors.HexColor("#2E5C8A")
+LIGHT_BLUE = colors.HexColor("#DCE6F1")
 GREY_LINE = colors.HexColor("#666666")
 
 
 def _style(name, size=9, align=TA_LEFT, color=colors.black, leading=None):
     return ParagraphStyle(
-        name=name,
-        fontName=FONT_NAME,
-        fontSize=size,
-        leading=leading or size * 1.5,
-        alignment=align,
-        textColor=color,
+        name=name, fontName=FONT_NAME, fontSize=size,
+        leading=leading or size * 1.5, alignment=align, textColor=color,
     )
 
 
@@ -76,14 +60,12 @@ STYLES = {
 
 
 def _p(text, style_key="cell"):
-    """helper: 把換行符號 \n 轉成 <br/>，回傳 Paragraph 物件"""
     text = "" if text is None else str(text)
     text = text.replace("\n", "<br/>")
     return Paragraph(text, STYLES[style_key])
 
 
 def _section_header_table(text, width):
-    """畫出像原範本一樣的藍底區塊標題列，例如「客戶基本資料」「備 註」"""
     t = Table([[_p(text, "section_header")]], colWidths=[width])
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), PRIMARY_COLOR),
@@ -97,9 +79,7 @@ def _section_header_table(text, width):
 def _calc_items(items):
     """
     依照每個項目的 unit_price(原價) 與 discount(折數, 0~1之間)
-    計算出 專案價格 與 小計，並回傳處理後的清單 + 總金額。
-
-    折數欄位只用於計算，不會輸出到最終報價單上。
+    計算出 專案價格 與 小計。折數欄位只用於計算，不會輸出到最終報價單上。
     """
     processed = []
     subtotal_sum = 0
@@ -108,10 +88,6 @@ def _calc_items(items):
         discount = item.get("discount", 1)  # 1 = 不打折 (10折)
         qty = item.get("qty", 1)
 
-        price = unit_price
-        line_subtotal = project_price * qty
-        subtotal_sum += line_subtotal
-       
         project_price = round(unit_price * discount)
         line_subtotal = project_price * qty
         subtotal_sum += line_subtotal
@@ -122,6 +98,7 @@ def _calc_items(items):
             "description": item.get("description", ""),
             "unit": item.get("unit", "式"),
             "qty": qty,
+            "price": unit_price,
             "project_price": project_price,
             "subtotal": line_subtotal,
         })
@@ -129,14 +106,6 @@ def _calc_items(items):
 
 
 def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
-    """
-    產生報價單 PDF。
-
-    data 結構請參考 example_data()。
-    logo_path：公司 Logo 圖片路徑（png/jpg 皆可，建議透明背景 png）。
-               不指定的話，會自動找 assets/logo.png；找不到就不畫 Logo。
-               Logo 會印在每一頁的右上角。
-    """
     page_width, page_height = A4
     margin = 15 * mm
     content_width = page_width - 2 * margin
@@ -160,41 +129,29 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
                 mask="auto", preserveAspectRatio=True,
             )
         except Exception:
-            # Logo 讀取失敗就略過，不影響報價單其他內容產出
             pass
 
     doc = SimpleDocTemplate(
-        output_path,
-        pagesize=A4,
-        leftMargin=margin,
-        rightMargin=margin,
-        topMargin=10 * mm,
-        bottomMargin=page_height / 3,   # 底部至少留白約 1/3 頁面高度
+        output_path, pagesize=A4,
+        leftMargin=margin, rightMargin=margin,
+        topMargin=10 * mm, bottomMargin=page_height / 3,
         title=data.get("quote_no", "Quotation"),
     )
 
     story = []
 
-    # ------------------------------------------------------------------
-    # 公司抬頭
-    # ------------------------------------------------------------------
     company = data.get("issuer", {})
     story.append(Paragraph(company.get("name_zh", "元盾資安股份有限公司"), STYLES["title"]))
     story.append(Paragraph(company.get("name_en", "Meta Shield Security Co., Ltd."), STYLES["subtitle"]))
     story.append(Spacer(1, 2))
     contact_line = "服務電話：{phone} ，服務信箱：{mail} ，服務地址：{addr}".format(
-        phone=company.get("phone", ""),
-        mail=company.get("email", ""),
-        addr=company.get("address", ""),
+        phone=company.get("phone", ""), mail=company.get("email", ""), addr=company.get("address", ""),
     )
     story.append(Paragraph(contact_line, _style("issuer_contact", size=8, align=TA_CENTER, leading=10)))
     story.append(Spacer(1, 4))
     story.append(Paragraph("報　價　單<br/>Quotation", _style("doc_title", size=12, align=TA_CENTER, leading=15)))
     story.append(Spacer(1, 4))
 
-    # ------------------------------------------------------------------
-    # 客戶基本資料
-    # ------------------------------------------------------------------
     story.append(_section_header_table("客 戶 基 本 資 料", content_width))
 
     client = data.get("client", {})
@@ -222,27 +179,19 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
     story.append(info_table)
     story.append(Spacer(1, 0))
 
-    # ------------------------------------------------------------------
-    # 產品項目表格
-    # ------------------------------------------------------------------
     items, subtotal_sum = _calc_items(data.get("items", []))
 
     col_widths = [
-        content_width * 0.05,   # No.
-        content_width * 0.16,   # 產品名稱
-        content_width * 0.36,   # 內容描述
-        content_width * 0.05,   # 單位
-        content_width * 0.05,   # 數量
-        content_width * 0.10,   # 單價
-        content_width * 0.10,   # 力麗專案價格 (計算後價格)
-        content_width * 0.13,   # 小計
+        content_width * 0.05, content_width * 0.16, content_width * 0.36,
+        content_width * 0.05, content_width * 0.05, content_width * 0.10,
+        content_width * 0.10, content_width * 0.13,
     ]
 
     header_row = [
         _p("No.", "cell_center"), _p("產品名稱", "cell_center"),
         _p("內容描述", "cell_center"), _p("單位", "cell_center"),
         _p("數量", "cell_center"), _p("單 價", "cell_center"),
-        _p("專案價格", "cell_center"),_p("小 計", "cell_center"),
+        _p("專案價格", "cell_center"), _p("小 計", "cell_center"),
     ]
     table_data = [header_row]
     for it in items:
@@ -269,9 +218,6 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
     ]))
     story.append(items_table)
 
-    # ------------------------------------------------------------------
-    # 金額合計 / 營業稅 / 總計
-    # ------------------------------------------------------------------
     tax_rate = data.get("tax_rate", 0.05)
     tax = round(subtotal_sum * tax_rate)
     grand_total = subtotal_sum + tax
@@ -294,9 +240,6 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
     ]))
     story.append(summary_table)
 
-    # ------------------------------------------------------------------
-    # 備註區
-    # ------------------------------------------------------------------
     story.append(_section_header_table("備　　　　　　　註", content_width))
 
     notes = data.get("notes", [
@@ -306,8 +249,6 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
         "4、付款方式：現金、匯款，交貨後開立發票後30天內付款。",
         "5、本報價單如經貴單位加蓋公司章或發票章為後傳真回傳 即視為正式報價單。",
         "6、以上專案金額總計費用為含稅價。",
-        "",
-        "",
     ])
     payment = data.get("payment_account", {})
     notes_left = "<br/>".join(notes) + \
@@ -328,14 +269,11 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
     ]))
     story.append(notes_table)
 
-    # ------------------------------------------------------------------
-    # 內部簽核欄
-    # ------------------------------------------------------------------
     sign_headers = ["執行單位主管", "業務主管", "技術單位", "業務人員"]
     sign_table = Table(
         [[_p(h, "cell_center") for h in sign_headers], ["", "", "", ""]],
         colWidths=[content_width / 4] * 4,
-        rowHeights=[13, 36],
+        rowHeights=[13, 28],
     )
     sign_table.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.75, colors.black),
@@ -353,9 +291,6 @@ def generate_quotation(data, output_path="quotation.pdf", logo_path=None):
     return output_path
 
 
-# ---------------------------------------------------------------------------
-# 範例資料：對應附件「力麗科技-元盾資安 M偵測回應」報價單
-# ---------------------------------------------------------------------------
 def example_data():
     return {
         "issuer": {
@@ -384,21 +319,15 @@ def example_data():
                 "name": "M-Standard\n資安託管偵測回應服務",
                 "description": (
                     "FMDR-M-Standard 提供的一年訂閱服務：\n"
-                    "1. 7x24 監控與警報處理\n"
-                    "2. MDR中文平台介面\n"
-                    "3. 分析系統警報\n"
-                    "4. 主動排除誤報\n"
-                    "5. 協助判斷可疑程式與處理建議\n"
+                    "1. 7x24 監控與警報處理\n2. MDR中文平台介面\n3. 分析系統警報\n"
+                    "4. 主動排除誤報\n5. 協助判斷可疑程式與處理建議\n"
                     "6. 主動式威脅獵捕(Threat Hunting)提供事件響應服務\n"
-                    "7. 遠程IR服務\n"
-                    "8. 提供月度報表與報告\n"
-                    "9. 一年顧問服務協助排除問題\n"
-                    "使用期間:一年"
+                    "7. 遠程IR服務\n8. 提供月度報表與報告\n9. 一年顧問服務協助排除問題\n使用期間:一年"
                 ),
                 "unit": "式",
                 "qty": 60,
-                "unit_price": 2000,   # 原價 (定價)
-                "discount": 0.9,      # 折數：9折 -> 專案價格 = 2000*0.9 = 1800
+                "unit_price": 2000,
+                "discount": 0.9,
             }
         ],
         "tax_rate": 0.05,
